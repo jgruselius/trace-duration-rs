@@ -1,26 +1,21 @@
-use log::{info, LevelFilter};
-use env_logger;
-use std::fs::OpenOptions;
-use std::io::{BufReader, BufRead};
-use std::path::{PathBuf};
+use anyhow::{bail, ensure, Context, Result};
+use chrono::{Duration, NaiveDateTime};
+use clap::{App, Arg};
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use chrono::{NaiveDateTime, Duration};
-use anyhow::{bail, ensure, Context, Result};
-use clap::{App, Arg};
+use env_logger;
+use log::{info, LevelFilter};
 use regex::Regex;
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 
 fn main() -> Result<()> {
-
     let matches = App::new("<app_name>")
         .version("0.1")
         .author("Joel Gruselius <joel.gruselius@perkinelmer.com>")
-        .about(
-            "<description>",
-        )
-        .after_help(
-            "<extra>"
-        )
+        .about("<description>")
+        .after_help("<extra>")
         .arg(
             Arg::new("from")
                 .help("The pattern that defines the start")
@@ -104,13 +99,13 @@ impl ArgExt for clap::ArgMatches {
 fn format_duration(d: &Duration) -> String {
     let sign = match d.num_seconds() {
         s if s < 0 => "–",
-        _ => "+"
+        _ => "+",
     };
     let total_secs = d.num_seconds().abs();
     let secs = total_secs % 60;
     let mins = (total_secs / 60) % 60;
     let hours = total_secs / 60 / 60;
-    format!("({}{:0>2}:{:0>2}:{:0>2})", sign, hours, mins, secs)
+    format!("{} {:0>2}:{:0>2}:{:0>2}", sign, hours, mins, secs)
 }
 
 fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration> {
@@ -123,32 +118,40 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Dur
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
-/*    let reader = BufReader::new(
-        DecodeReaderBytesBuilder::new()
-        .encoding(Some(WINDOWS_1252))
-        .build(OpenOptions::new().read(true).open(&in_path)?));*/
+    /*    let reader = BufReader::new(
+    DecodeReaderBytesBuilder::new()
+    .encoding(Some(WINDOWS_1252))
+    .build(OpenOptions::new().read(true).open(&in_path)?));*/
     let file = OpenOptions::new().read(true).open(&in_path)?;
-    let reader = BufReader::new(DecodeReaderBytesBuilder::new()
+    let reader = BufReader::new(
+        DecodeReaderBytesBuilder::new()
             .encoding(Some(WINDOWS_1252))
-            .build(&file));
+            .build(&file),
+    );
     let mut l;
     for line in reader.lines() {
         l = line?;
         if !from_found {
             if re1.is_match(&l) {
                 info!("Matching line: {}", &l);
-                let timestamp = re_ts.captures(&l)
+                let timestamp = re_ts
+                    .captures(&l)
                     .context("Could not match a timestamp")?
-                    .get(0).context("Could not parse a timestamp")?.as_str();
+                    .get(0)
+                    .context("Could not parse a timestamp")?
+                    .as_str();
                 from = parse_datetime(timestamp.to_string()).ok();
                 from_found = true;
             }
         } else {
             if re2.is_match(&l) {
                 info!("Matching line: {}", &l);
-                let timestamp = re_ts.captures(&l)
+                let timestamp = re_ts
+                    .captures(&l)
                     .context("Could not match a timestamp")?
-                    .get(0).context("Could not parse a timestamp")?.as_str();
+                    .get(0)
+                    .context("Could not parse a timestamp")?
+                    .as_str();
                 to = parse_datetime(timestamp.to_string()).ok();
                 to_found = true;
                 break;
@@ -168,14 +171,16 @@ fn run(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration>
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
-/*    let reader = BufReader::new(
-        DecodeReaderBytesBuilder::new()
-        .encoding(Some(WINDOWS_1252))
-        .build(OpenOptions::new().read(true).open(&in_path)?));*/
+    /*    let reader = BufReader::new(
+    DecodeReaderBytesBuilder::new()
+    .encoding(Some(WINDOWS_1252))
+    .build(OpenOptions::new().read(true).open(&in_path)?));*/
     let file = OpenOptions::new().read(true).open(&in_path)?;
-    let reader = BufReader::new(DecodeReaderBytesBuilder::new()
+    let reader = BufReader::new(
+        DecodeReaderBytesBuilder::new()
             .encoding(Some(WINDOWS_1252))
-            .build(&file));
+            .build(&file),
+    );
     let mut l;
     for line in reader.lines() {
         l = line?;
@@ -208,8 +213,8 @@ fn run(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration>
 }
 
 fn parse_datetime(dt: String) -> Result<NaiveDateTime> {
-        let datetime = NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S")
-            .with_context(|| format!("could not parse {}", dt))?;
+    let datetime = NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S")
+        .with_context(|| format!("could not parse {}", dt))?;
     Ok(datetime)
 }
 
