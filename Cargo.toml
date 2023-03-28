@@ -7,13 +7,11 @@ authors = ["Joel Gruselius <joel.gruselius@perkinelmer.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-regex = "*"
+regex = "1"
 clap = { version="3.1" }  # This is the older API
-console = "0.15"
 log = "0.4"
-pretty_env_logger = "0.4"
+env_logger = "0.10"
 anyhow = "1"
-chrono = "0.4.24"
-humantime = "*"
-
-
+chrono = "0.4"
+encoding_rs = "0.8"
+encoding_rs_io = "0.1.7"

@@ -1,16 +1,14 @@
-use pretty_env_logger;
 use log::{info, LevelFilter};
+use env_logger;
 use std::fs::OpenOptions;
-use std::io::{Write, BufReader, BufRead};
-use std::path::{Path, PathBuf};
-//use std::time::Duration;
+use std::io::{BufReader, BufRead};
+use std::path::{PathBuf};
+use encoding_rs::WINDOWS_1252;
+use encoding_rs_io::DecodeReaderBytesBuilder;
 use chrono::{NaiveDateTime, Duration};
-use chrono::format::ParseError;
 use anyhow::{bail, ensure, Context, Result};
 use clap::{App, Arg};
-use console::{style, Style};
 use regex::Regex;
-use humantime::format_duration;
 
 fn main() -> Result<()> {
 
@@ -30,7 +28,7 @@ fn main() -> Result<()> {
                 .short('f')
                 .takes_value(true)
                 .value_name("PATTERN")
-                .validator(check_arg)
+                //.validator(check_arg)
                 .required(true),
         )
         .arg(
@@ -40,7 +38,7 @@ fn main() -> Result<()> {
                 .short('t')
                 .takes_value(true)
                 .value_name("PATTERN")
-                .validator(check_arg)
+                //.validator(check_arg)
                 .required(true),
         )
         .arg(
@@ -49,6 +47,14 @@ fn main() -> Result<()> {
                 .required(true)
                 .value_name("FILE")
                 .validator(|s| check_file(&PathBuf::from(s))),
+        )
+        .arg(
+            Arg::new("regex")
+                .help("Use regex patterns")
+                .long("regex")
+                .short('r')
+                .takes_value(false)
+                .required(false),
         )
         .arg(
             Arg::new("verbose")
@@ -63,17 +69,21 @@ fn main() -> Result<()> {
     } else {
         LevelFilter::Warn
     };
-    pretty_env_logger::formatted_builder()
+    env_logger::builder()
         .filter_level(log_level)
+        .format_timestamp(None)
         .init();
 
     let p1 = matches.get_arg("from")?;
     let p2 = matches.get_arg("to")?;
     let path = PathBuf::from(matches.get_arg("file")?);
 
-    let d = run(path, p1, p2)?;
+    let d = match matches.occurrences_of("regex") {
+        0 => run(path, p1, p2)?,
+        _ => run_regex(path, p1, p2)?,
+    };
 
-    println!("Duration: {}", format_duration(d.to_std()?));
+    println!("Duration: {}", format_duration(&d));
 
     Ok(())
 }
@@ -91,44 +101,66 @@ impl ArgExt for clap::ArgMatches {
     }
 }
 
-fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<()> {
-    let re_timestamp = Regex::new(r"$\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")?;
+fn format_duration(d: &Duration) -> String {
+    let sign = match d.num_seconds() {
+        s if s < 0 => "–",
+        _ => "+"
+    };
+    let total_secs = d.num_seconds().abs();
+    let secs = total_secs % 60;
+    let mins = (total_secs / 60) % 60;
+    let hours = total_secs / 60 / 60;
+    format!("({}{:0>2}:{:0>2}:{:0>2})", sign, hours, mins, secs)
+}
+
+fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration> {
+    let re_ts = Regex::new(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")?;
     let re1 = Regex::new(pattern1.as_str())
         .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
     let re2 = Regex::new(&*pattern2.as_str())
         .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
     let mut from_found = false;
     let mut to_found = false;
+    let mut from: Option<NaiveDateTime> = None;
+    let mut to: Option<NaiveDateTime> = None;
 /*    let reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
         .encoding(Some(WINDOWS_1252))
         .build(OpenOptions::new().read(true).open(&in_path)?));*/
     let file = OpenOptions::new().read(true).open(&in_path)?;
-    let reader = BufReader::new(&file);
+    let reader = BufReader::new(DecodeReaderBytesBuilder::new()
+            .encoding(Some(WINDOWS_1252))
+            .build(&file));
     let mut l;
     for line in reader.lines() {
         l = line?;
         if !from_found {
             if re1.is_match(&l) {
-                info!("{}", &l);
-                let (timestamp, _) = (&l).split_once(">").unwrap();
-                let from = parse_datetime(timestamp.to_string())?;
+                info!("Matching line: {}", &l);
+                let timestamp = re_ts.captures(&l)
+                    .context("Could not match a timestamp")?
+                    .get(0).context("Could not parse a timestamp")?.as_str();
+                from = parse_datetime(timestamp.to_string()).ok();
                 from_found = true;
             }
         } else {
             if re2.is_match(&l) {
-                info!("{}", &l);
-                let (timestamp, _) = (&l).split_once(">").unwrap();
-                let to = parse_datetime(timestamp.to_string())?;
+                info!("Matching line: {}", &l);
+                let timestamp = re_ts.captures(&l)
+                    .context("Could not match a timestamp")?
+                    .get(0).context("Could not parse a timestamp")?.as_str();
+                to = parse_datetime(timestamp.to_string()).ok();
                 to_found = true;
                 break;
             }
         }
     }
-    ensure!(from_found, format!("Did not find '{}'", pattern1));
-    ensure!(to_found, format!("Did not find '{}'", pattern2));
+    let duration = match (from, to) {
+        (Some(t1), Some(t2)) => t2 - t1,
+        _ => bail!("Could not parse a timestamp"),
+    };
 
-    Ok(())
+    Ok(duration)
 }
 
 fn run(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration> {
@@ -141,7 +173,9 @@ fn run(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration>
         .encoding(Some(WINDOWS_1252))
         .build(OpenOptions::new().read(true).open(&in_path)?));*/
     let file = OpenOptions::new().read(true).open(&in_path)?;
-    let reader = BufReader::new(&file);
+    let reader = BufReader::new(DecodeReaderBytesBuilder::new()
+            .encoding(Some(WINDOWS_1252))
+            .build(&file));
     let mut l;
     for line in reader.lines() {
         l = line?;
