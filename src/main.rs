@@ -53,6 +53,12 @@ fn main() -> Result<()> {
                 .required(false),
         )
         .arg(
+            Arg::new("short")
+                .help("Only print the duration")
+                .long("short")
+                .short('s'),
+        )
+        .arg(
             Arg::new("verbose")
                 .help("Print matching lines")
                 .long("verbose")
@@ -74,12 +80,17 @@ fn main() -> Result<()> {
     let p2 = matches.get_arg("to")?;
     let path = PathBuf::from(matches.get_arg("file")?);
 
-    let d = match matches.occurrences_of("regex") {
-        0 => run(path, p1, p2)?,
-        _ => run_regex(path, p1, p2)?,
+    let d = if matches.is_present("regex") {
+        run(path, p1.clone(), p2.clone())?
+    } else {
+        run_regex(path, p1.clone(), p2.clone())?
     };
 
-    println!("Duration: {}", format_duration(&d));
+    if matches.is_present("short") {
+        println!("{}", format_duration(&d));
+    } else {
+        println!("Duration between \"{}\" and \"{}\": {} (hh:mm:ss)", p1, p2, format_duration(&d));
+    }
 
     Ok(())
 }
