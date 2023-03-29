@@ -11,11 +11,12 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
-    let matches = App::new("<app_name>")
+    let matches = App::new("Trace duration")
         .version("0.1")
         .author("Joel Gruselius <joel.gruselius@perkinelmer.com>")
-        .about("<description>")
-        .after_help("<extra>")
+        .about("Find the time passed between the (first) occurrence of two strings or patterns \
+        in an Extract or Core trace file")
+        //.after_help("<extra>")
         .arg(
             Arg::new("from")
                 .help("The pattern that defines the start")
@@ -53,7 +54,7 @@ fn main() -> Result<()> {
         )
         .arg(
             Arg::new("verbose")
-                .help("Print information about what goes on")
+                .help("Print matching lines")
                 .long("verbose")
                 .short('v'),
         )
