@@ -3,12 +3,11 @@ use chrono::{Duration, NaiveDateTime};
 use clap::{App, Arg};
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use env_logger;
 use log::{info, LevelFilter};
 use regex::Regex;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
     let matches = App::new("Trace duration")
@@ -131,16 +130,12 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Dur
     let re_ts = Regex::new(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")?;
     let re1 = Regex::new(pattern1.as_str())
         .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
-    let re2 = Regex::new(&*pattern2.as_str())
+    let re2 = Regex::new(pattern2.as_str())
         .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
     let mut from_found = false;
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
-    /*    let reader = BufReader::new(
-    DecodeReaderBytesBuilder::new()
-    .encoding(Some(WINDOWS_1252))
-    .build(OpenOptions::new().read(true).open(&in_path)?));*/
     let file = OpenOptions::new().read(true).open(&in_path)?;
     let reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
@@ -162,8 +157,7 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Dur
                 from = parse_datetime(timestamp.to_string()).ok();
                 from_found = true;
             }
-        } else {
-            if re2.is_match(&l) {
+        } else if re2.is_match(&l) {
                 info!("Matching line: {}", &l);
                 let timestamp = re_ts
                     .captures(&l)
@@ -174,9 +168,11 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Dur
                 to = parse_datetime(timestamp.to_string()).ok();
                 to_found = true;
                 break;
-            }
         }
     }
+    ensure!(from_found, format!("Did not find '{}'", pattern1));
+    ensure!(to_found, format!("Did not find '{}'", pattern2));
+
     let duration = match (from, to) {
         (Some(t1), Some(t2)) => t2 - t1,
         _ => bail!("Could not parse a timestamp"),
@@ -190,10 +186,6 @@ fn run(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration>
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
-    /*    let reader = BufReader::new(
-    DecodeReaderBytesBuilder::new()
-    .encoding(Some(WINDOWS_1252))
-    .build(OpenOptions::new().read(true).open(&in_path)?));*/
     let file = OpenOptions::new().read(true).open(&in_path)?;
     let reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
@@ -204,20 +196,18 @@ fn run(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration>
     for line in reader.lines() {
         l = line?;
         if !from_found {
-            if (&l).contains(&pattern1) {
+            if l.contains(&pattern1) {
                 info!("Matching line: {}", &l);
-                let (timestamp, _) = (&l).split_once(">").unwrap();
+                let (timestamp, _) = (l).split_once('>').unwrap();
                 from = parse_datetime(timestamp.to_string()).ok();
                 from_found = true;
             }
-        } else {
-            if (&l).contains(&pattern2) {
+        } else if l.contains(&pattern2) {
                 info!("Matching line: {}", &l);
-                let (timestamp, _) = (&l).split_once(">").unwrap();
+                let (timestamp, _) = (l).split_once('>').unwrap();
                 to = parse_datetime(timestamp.to_string()).ok();
                 to_found = true;
                 break;
-            }
         }
     }
     ensure!(from_found, format!("Did not find '{}'", pattern1));
@@ -252,7 +242,7 @@ where
     }
 }
 
-fn check_file(path: &PathBuf) -> Result<()> {
+fn check_file(path: &Path) -> Result<()> {
     ensure!(path.exists(), "{} does not exist", path.display());
     ensure!(path.is_file(), "{} is not a file", path.display());
     Ok(())
