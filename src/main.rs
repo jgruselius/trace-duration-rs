@@ -14,8 +14,10 @@ fn main() -> Result<()> {
     let matches = App::new("Trace duration")
         .version("0.1")
         .author("Joel Gruselius <joel.gruselius@perkinelmer.com>")
-        .about("Find the time passed between the (first) occurrence of two strings or patterns \
-        in an Extract or Core trace file")
+        .about(
+            "Find the time passed between the (first) occurrence of two strings or patterns \
+        in an Extract or Core trace file",
+        )
         //.after_help("<extra>")
         .arg(
             Arg::new("from")
@@ -89,7 +91,12 @@ fn main() -> Result<()> {
     if matches.is_present("short") {
         println!("{}", format_duration(&d));
     } else {
-        println!("Duration between \"{}\" and \"{}\": {} (hh:mm:ss)", p1, p2, format_duration(&d));
+        println!(
+            "\"{}\" => \"{}\": {} (hh:mm:ss)",
+            p1,
+            p2,
+            format_duration(&d)
+        );
     }
 
     Ok(())
@@ -117,7 +124,7 @@ fn format_duration(d: &Duration) -> String {
     let secs = total_secs % 60;
     let mins = (total_secs / 60) % 60;
     let hours = total_secs / 60 / 60;
-    format!("{} {:0>2}:{:0>2}:{:0>2}", sign, hours, mins, secs)
+    format!("{}{:0>2}:{:0>2}:{:0>2}", sign, hours, mins, secs)
 }
 
 fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String) -> Result<Duration> {
