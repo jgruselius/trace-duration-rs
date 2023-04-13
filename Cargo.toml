@@ -1,20 +1,21 @@
 [package]
 name = "trace-duration-rs"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["Joel Gruselius <joel.gruselius@perkinelmer.com>"]
+description = "Find the time passed between the (first) occurrence of two strings or patterns in an Extract or Core trace file"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 regex = "1"
-clap = { version="3.1" }  # This is the older API
 log = "0.4"
 env_logger = "0.10"
 anyhow = "1"
 chrono = "0.4"
 encoding_rs = "0.8"
 encoding_rs_io = "0.1.7"
+clap = { version = "4", features = ["derive"] }
 
 [profile.release]
 lto = true

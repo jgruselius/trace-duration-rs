@@ -1,6 +1,6 @@
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{Duration, NaiveDateTime};
-use clap::{App, Arg};
+use clap::Parser;
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use log::{info, LevelFilter};
@@ -9,65 +9,38 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-fn main() -> Result<()> {
-    let matches = App::new("Trace duration")
-        .version("0.1")
-        .author("Joel Gruselius <joel.gruselius@perkinelmer.com>")
-        .about(
-            "Find the time passed between the (first) occurrence of two strings or patterns \
-        in an Extract or Core trace file",
-        )
-        //.after_help("<extra>")
-        .arg(
-            Arg::new("from")
-                .help("The pattern that defines the start")
-                .long("from")
-                .short('f')
-                .takes_value(true)
-                .value_name("PATTERN")
-                //.validator(check_arg)
-                .required(true),
-        )
-        .arg(
-            Arg::new("to")
-                .help("The pattern that defines the end")
-                .long("to")
-                .short('t')
-                .takes_value(true)
-                .value_name("PATTERN")
-                //.validator(check_arg)
-                .required(true),
-        )
-        .arg(
-            Arg::new("file")
-                .help("The trace file to search")
-                .required(true)
-                .value_name("FILE")
-                .validator(|s| check_file(&PathBuf::from(s))),
-        )
-        .arg(
-            Arg::new("regex")
-                .help("Use regex patterns")
-                .long("regex")
-                .short('r')
-                .takes_value(false)
-                .required(false),
-        )
-        .arg(
-            Arg::new("short")
-                .help("Only print the duration")
-                .long("short")
-                .short('s'),
-        )
-        .arg(
-            Arg::new("verbose")
-                .help("Print matching lines")
-                .long("verbose")
-                .short('v'),
-        )
-        .get_matches();
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// The pattern that defines the start
+    #[arg(short, long, value_name="PATTERN")]
+    from: String,
 
-    let log_level = if matches.is_present("verbose") {
+    /// The pattern that defines the end
+    #[arg(short, long, value_name="PATTERN")]
+    to: String,
+
+    /// The trace file to search
+    #[arg(value_name="FILE", value_parser=check_file)]
+    file: PathBuf,
+
+    /// Use regex patterns
+    #[arg(short, long)]
+    regex: bool,
+
+    /// Only print the duration
+    #[arg(short, long)]
+    short: bool,
+
+    /// Print matching lines
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+fn main() -> Result<()> {
+    let matches = Cli::parse();
+
+    let log_level = if matches.verbose {
         LevelFilter::Info
     } else {
         LevelFilter::Warn
@@ -77,17 +50,16 @@ fn main() -> Result<()> {
         .format_timestamp(None)
         .init();
 
-    let p1 = matches.get_arg("from")?;
-    let p2 = matches.get_arg("to")?;
-    let path = PathBuf::from(matches.get_arg("file")?);
+    let p1 = matches.from;
+    let p2 = matches.to;
 
-    let d = if matches.is_present("regex") {
-        run(path, p1.clone(), p2.clone())?
+    let d = if matches.regex {
+        run(matches.file, p1.clone(), p2.clone())?
     } else {
-        run_regex(path, p1.clone(), p2.clone())?
+        run_regex(matches.file, p1.clone(), p2.clone())?
     };
 
-    if matches.is_present("short") {
+    if matches.short {
         println!("{}", format_duration(&d));
     } else {
         println!(
@@ -99,19 +71,6 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-trait ArgExt {
-    fn get_arg(&self, arg: &str) -> Result<String>;
-}
-
-impl ArgExt for clap::ArgMatches {
-    fn get_arg(&self, arg: &str) -> Result<String> {
-        match self.value_of(arg) {
-            Some(v) => Ok(v.to_string()),
-            None => bail!("No argument matching {}", arg),
-        }
-    }
 }
 
 fn format_duration(d: &Duration) -> String {
@@ -242,8 +201,9 @@ where
     }
 }
 
-fn check_file(path: &Path) -> Result<()> {
+fn check_file(s: &str) -> Result<PathBuf> {
+    let path = PathBuf::from(s);
     ensure!(path.exists(), "{} does not exist", path.display());
     ensure!(path.is_file(), "{} is not a file", path.display());
-    Ok(())
+    Ok(path)
 }
