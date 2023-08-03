@@ -10,7 +10,13 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, help_template="
+{before-help}{name} {version}
+{author-with-newline}{about-with-newline}
+{usage-heading} {usage}
+
+{all-args}{after-help}
+")]
 struct Cli {
     #[command(flatten)]
     from: FromMode,
