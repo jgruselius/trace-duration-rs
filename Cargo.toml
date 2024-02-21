@@ -2,7 +2,7 @@
 name = "trace-duration-rs"
 version = "0.5.0"
 edition = "2021"
-authors = ["Joel Gruselius <joel.gruselius@perkinelmer.com>"]
+authors = ["Joel Gruselius <joel.gruselius@revvity.com>"]
 description = "Find the time passed between the (first) occurrence of two strings or patterns in an Extract or Core trace file"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -19,3 +19,4 @@ clap = { version = "4", features = ["derive"] }
 
 [profile.release]
 lto = true
+strip = true
