@@ -1,16 +1,16 @@
 [package]
 name = "trace-duration-rs"
-version = "0.5.0"
+version = "0.7.0"
 edition = "2021"
-authors = ["Joel Gruselius <joel.gruselius@revvity.com>"]
-description = "Find the time passed between the (first) occurrence of two strings or patterns in an Extract or Core trace file"
+authors = ["Joel Gruselius <github.com/jgruselius>"]
+description = "Find the time passed between the (first) occurrence of two strings or patterns in a log file"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 regex = "1"
 log = "0.4"
-env_logger = "0.10"
+env_logger = "0.11"
 anyhow = "1"
 chrono = "0.4"
 encoding_rs = "0.8"
