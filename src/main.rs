@@ -1,6 +1,6 @@
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{Duration, NaiveDateTime};
-use clap::{Parser, Args};
+use clap::{Args, Parser};
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use log::{debug, info, LevelFilter};
@@ -45,11 +45,11 @@ struct Cli {
 #[group(required = true, multiple = false)]
 struct FromMode {
     /// The pattern that defines the start
-    #[arg(short, long, value_name="PATTERN")]
+    #[arg(short, long, value_name = "PATTERN")]
     from: Option<String>,
 
     /// The pattern that defines the start (last match)
-    #[arg(short='F', long="from-last", value_name="PATTERN")]
+    #[arg(short = 'F', long = "from-last", value_name = "PATTERN")]
     fromlast: Option<String>,
 }
 
@@ -57,11 +57,11 @@ struct FromMode {
 #[group(required = true, multiple = false)]
 struct ToMode {
     /// The pattern that defines the end
-    #[arg(short, long, value_name="PATTERN")]
+    #[arg(short, long, value_name = "PATTERN")]
     to: Option<String>,
 
     /// The pattern that defines the end (last match)
-    #[arg(short='T', long="to-last", value_name="PATTERN")]
+    #[arg(short = 'T', long = "to-last", value_name = "PATTERN")]
     tolast: Option<String>,
 }
 
@@ -75,6 +75,8 @@ fn main() -> Result<()> {
     };
     env_logger::builder()
         .filter_level(log_level)
+        .format_timestamp(None)
+        //.format(|buf, record| writeln!(buf, "{}: {}", record.level(), record.args()))
         .init();
 
     let from = matches.from;
@@ -88,9 +90,9 @@ fn main() -> Result<()> {
         _ => (to.tolast.unwrap(), true),
     };
     let d = if matches.regex {
-        run_regex(matches.file, p1.clone(), p2.clone(), p1_replace, p2_replace)?
+        run_regex(matches.file, &p1, &p2, p1_replace, p2_replace)?
     } else {
-        run(matches.file, p1.clone(), p2.clone(), p1_replace, p2_replace)?
+        run(matches.file, &p1, &p2, p1_replace, p2_replace)?
     };
 
     if matches.short {
@@ -119,27 +121,33 @@ fn format_duration(d: &Duration) -> String {
     format!("{}{:0>2}:{:0>2}:{:0>2}", sign, hours, mins, secs)
 }
 
-fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String, p1_replace: bool, p2_replace: bool) -> Result<Duration> {
+fn run_regex(
+    in_path: PathBuf,
+    pattern1: &str,
+    pattern2: &str,
+    p1_replace: bool,
+    p2_replace: bool,
+) -> Result<Duration> {
     let re_ts = Regex::new(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")?;
-    let re1 = Regex::new(pattern1.as_str())
-        .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
-    let re2 = Regex::new(pattern2.as_str())
-        .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
+    let re1 =
+        Regex::new(pattern1).with_context(|| format!("'{}' is not a valid regex", pattern1))?;
+    let re2 =
+        Regex::new(pattern2).with_context(|| format!("'{}' is not a valid regex", pattern1))?;
     let mut from_found = false;
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
-    let file = OpenOptions::new().read(true).open(&in_path)?;
+    let file = OpenOptions::new().read(true).open(in_path)?;
     let reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
             .encoding(Some(WINDOWS_1252))
             .build(&file),
     );
     let mut l;
-    for line in reader.lines() {
+    for (i, line) in reader.lines().enumerate() {
         l = line?;
         if (!from_found || p1_replace) && re1.is_match(&l) {
-            info!("Matching line: {}", &l);
+            info!("Matching line [{}]: {}", i, &l);
             let timestamp = re_ts
                 .captures(&l)
                 .context("Could not match a timestamp")?
@@ -150,7 +158,7 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String, p1_replace: b
             from_found = true;
         }
         if from_found && re2.is_match(&l) {
-            info!("Matching line: {}", &l);
+            info!("Matching line [{}]: {}", i, &l);
             let timestamp = re_ts
                 .captures(&l)
                 .context("Could not match a timestamp")?
@@ -160,7 +168,7 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String, p1_replace: b
             to = parse_datetime(timestamp.to_string()).ok();
             to_found = true;
             if !p2_replace {
-                break
+                break;
             }
         }
     }
@@ -175,33 +183,39 @@ fn run_regex(in_path: PathBuf, pattern1: String, pattern2: String, p1_replace: b
     Ok(duration)
 }
 
-fn run(in_path: PathBuf, pattern1: String, pattern2: String, p1_replace: bool, p2_replace: bool) -> Result<Duration> {
+fn run(
+    in_path: PathBuf,
+    pattern1: &str,
+    pattern2: &str,
+    p1_replace: bool,
+    p2_replace: bool,
+) -> Result<Duration> {
     let mut from_found = false;
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
-    let file = OpenOptions::new().read(true).open(&in_path)?;
+    let file = OpenOptions::new().read(true).open(in_path)?;
     let reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
             .encoding(Some(WINDOWS_1252))
             .build(&file),
     );
     let mut l;
-    for line in reader.lines() {
+    for (i, line) in reader.lines().enumerate() {
         l = line?;
-        if (!from_found || p1_replace) && l.contains(&pattern1) {
-            info!("Matching line: {}", &l);
+        if (!from_found || p1_replace) && l.contains(pattern1) {
+            info!("Matching line [{}]: {}", i, &l);
             let (timestamp, _) = (l).split_once('>').unwrap();
             from = parse_datetime(timestamp.to_string()).ok();
             from_found = true;
         }
-        if from_found && l.contains(&pattern2) {
-            info!("Matching line: {}", &l);
+        if from_found && l.contains(pattern2) {
+            info!("Matching line [{}]: {}", i, &l);
             let (timestamp, _) = (l).split_once('>').unwrap();
             to = parse_datetime(timestamp.to_string()).ok();
             to_found = true;
             if !p2_replace {
-                break
+                break;
             }
         }
     }
