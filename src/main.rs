@@ -6,7 +6,7 @@ use encoding_rs_io::DecodeReaderBytesBuilder;
 use log::{debug, info, LevelFilter};
 use regex::Regex;
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -76,7 +76,6 @@ fn main() -> Result<()> {
     env_logger::builder()
         .filter_level(log_level)
         .format_timestamp(None)
-        //.format(|buf, record| writeln!(buf, "{}: {}", record.level(), record.args()))
         .init();
 
     let from = matches.from;
@@ -129,47 +128,56 @@ fn run_regex(
     p2_replace: bool,
 ) -> Result<Duration> {
     let re_ts = Regex::new(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")?;
-    let re1 =
-        Regex::new(pattern1).with_context(|| format!("'{}' is not a valid regex", pattern1))?;
-    let re2 =
-        Regex::new(pattern2).with_context(|| format!("'{}' is not a valid regex", pattern1))?;
+    let re1 = Regex::new(pattern1)
+        .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
+    let re2 = Regex::new(pattern2)
+        .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
     let mut from_found = false;
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
     let file = OpenOptions::new().read(true).open(in_path)?;
-    let reader = BufReader::new(
+    let mut reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
             .encoding(Some(WINDOWS_1252))
             .build(&file),
     );
-    let mut l;
-    for (i, line) in reader.lines().enumerate() {
-        l = line?;
-        if (!from_found || p1_replace) && re1.is_match(&l) {
-            info!("Matching line [{}]: {}", i, &l);
-            let timestamp = re_ts
-                .captures(&l)
-                .context("Could not match a timestamp")?
-                .get(0)
-                .context("Could not parse a timestamp")?
-                .as_str();
-            from = parse_datetime(timestamp.to_string()).ok();
-            from_found = true;
-        }
-        if from_found && re2.is_match(&l) {
-            info!("Matching line [{}]: {}", i, &l);
-            let timestamp = re_ts
-                .captures(&l)
-                .context("Could not match a timestamp")?
-                .get(0)
-                .context("Could not parse a timestamp")?
-                .as_str();
-            to = parse_datetime(timestamp.to_string()).ok();
-            to_found = true;
-            if !p2_replace {
-                break;
+    let r = reader.by_ref();
+    let mut buf = String::new();
+    let read_max = 4096;
+    let mut i: usize = 0;
+    loop {
+        buf.clear();
+        let n = r.take(read_max).read_line(&mut buf)?;
+        if n > 0 {
+            i += 1;
+            if (!from_found || p1_replace) && re1.is_match(&buf) {
+                info!("Matching line [{}]: {}", i, &buf);
+                let timestamp = re_ts
+                    .captures(&buf)
+                    .context("Could not match a timestamp")?
+                    .get(0)
+                    .context("Could not parse a timestamp")?
+                    .as_str();
+                from = parse_datetime(timestamp.to_string()).ok();
+                from_found = true;
             }
+            if from_found && re2.is_match(&buf) {
+                info!("Matching line [{}]: {}", i, &buf);
+                let timestamp = re_ts
+                    .captures(&buf)
+                    .context("Could not match a timestamp")?
+                    .get(0)
+                    .context("Could not parse a timestamp")?
+                    .as_str();
+                to = parse_datetime(timestamp.to_string()).ok();
+                to_found = true;
+                if !p2_replace {
+                    break;
+                }
+            }
+        } else {
+            break;
         }
     }
     ensure!(from_found, format!("Did not find '{}'", pattern1));
@@ -195,28 +203,37 @@ fn run(
     let mut from: Option<NaiveDateTime> = None;
     let mut to: Option<NaiveDateTime> = None;
     let file = OpenOptions::new().read(true).open(in_path)?;
-    let reader = BufReader::new(
+    let mut reader = BufReader::new(
         DecodeReaderBytesBuilder::new()
             .encoding(Some(WINDOWS_1252))
             .build(&file),
     );
-    let mut l;
-    for (i, line) in reader.lines().enumerate() {
-        l = line?;
-        if (!from_found || p1_replace) && l.contains(pattern1) {
-            info!("Matching line [{}]: {}", i, &l);
-            let (timestamp, _) = (l).split_once('>').unwrap();
-            from = parse_datetime(timestamp.to_string()).ok();
-            from_found = true;
-        }
-        if from_found && l.contains(pattern2) {
-            info!("Matching line [{}]: {}", i, &l);
-            let (timestamp, _) = (l).split_once('>').unwrap();
-            to = parse_datetime(timestamp.to_string()).ok();
-            to_found = true;
-            if !p2_replace {
-                break;
+    let r = reader.by_ref();
+    let mut buf = String::new();
+    let read_max = 4096;
+    let mut i: usize = 0;
+    loop {
+        buf.clear();
+        let n = r.take(read_max).read_line(&mut buf)?;
+        if n > 0 {
+            i += 1;
+            if (!from_found || p1_replace) && buf.contains(pattern1) {
+                info!("Matching line [{}]: {}", i, &buf);
+                let (timestamp, _) = buf.split_once('>').unwrap();
+                from = parse_datetime(timestamp.to_string()).ok();
+                from_found = true;
             }
+            if from_found && buf.contains(pattern2) {
+                info!("Matching line [{}]: {}", i, &buf);
+                let (timestamp, _) = buf.split_once('>').unwrap();
+                to = parse_datetime(timestamp.to_string()).ok();
+                to_found = true;
+                if !p2_replace {
+                    break;
+                }
+            }
+        } else {
+            break;
         }
     }
     ensure!(from_found, format!("Did not find '{}'", pattern1));
