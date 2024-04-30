@@ -29,15 +29,15 @@ struct Cli {
     file: PathBuf,
 
     /// Use regex patterns
-    #[arg(short, long)]
+    #[arg(short, long, help_heading = "Search")]
     regex: bool,
 
     /// Only print the duration
-    #[arg(short, long)]
+    #[arg(short, long, help_heading = "Output")]
     short: bool,
 
     /// Print matching lines
-    #[arg(short, long)]
+    #[arg(short, long, help_heading = "Output")]
     verbose: bool,
 }
 
@@ -45,11 +45,16 @@ struct Cli {
 #[group(required = true, multiple = false)]
 struct FromMode {
     /// The pattern that defines the start
-    #[arg(short, long, value_name = "PATTERN")]
+    #[arg(short, long, value_name = "PATTERN", help_heading = "Search")]
     from: Option<String>,
 
     /// The pattern that defines the start (last match)
-    #[arg(short = 'F', long = "from-last", value_name = "PATTERN")]
+    #[arg(
+        short = 'F',
+        long = "from-last",
+        value_name = "PATTERN",
+        help_heading = "Search"
+    )]
     fromlast: Option<String>,
 }
 
@@ -57,11 +62,16 @@ struct FromMode {
 #[group(required = true, multiple = false)]
 struct ToMode {
     /// The pattern that defines the end
-    #[arg(short, long, value_name = "PATTERN")]
+    #[arg(short, long, value_name = "PATTERN", help_heading = "Search")]
     to: Option<String>,
 
     /// The pattern that defines the end (last match)
-    #[arg(short = 'T', long = "to-last", value_name = "PATTERN")]
+    #[arg(
+        short = 'T',
+        long = "to-last",
+        value_name = "PATTERN",
+        help_heading = "Search"
+    )]
     tolast: Option<String>,
 }
 
@@ -120,13 +130,9 @@ fn format_duration(d: &Duration) -> String {
     format!("{}{:0>2}:{:0>2}:{:0>2}", sign, hours, mins, secs)
 }
 
-fn run_regex(
-    in_path: PathBuf,
-    pattern1: &str,
-    pattern2: &str,
-    p1_replace: bool,
-    p2_replace: bool,
-) -> Result<Duration> {
+fn run_regex(in_path: PathBuf, pattern1: &str, pattern2: &str,
+        p1_replace: bool, p2_replace: bool) -> Result<Duration> {
+
     let re_ts = Regex::new(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")?;
     let re1 = Regex::new(pattern1)
         .with_context(|| format!("'{}' is not a valid regex", pattern1))?;
@@ -159,7 +165,7 @@ fn run_regex(
                     .get(0)
                     .context("Could not parse a timestamp")?
                     .as_str();
-                from = parse_datetime(timestamp.to_string()).ok();
+                from = parse_datetime(timestamp).ok();
                 from_found = true;
             }
             if from_found && re2.is_match(&buf) {
@@ -170,7 +176,7 @@ fn run_regex(
                     .get(0)
                     .context("Could not parse a timestamp")?
                     .as_str();
-                to = parse_datetime(timestamp.to_string()).ok();
+                to = parse_datetime(timestamp).ok();
                 to_found = true;
                 if !p2_replace {
                     break;
@@ -191,13 +197,9 @@ fn run_regex(
     Ok(duration)
 }
 
-fn run(
-    in_path: PathBuf,
-    pattern1: &str,
-    pattern2: &str,
-    p1_replace: bool,
-    p2_replace: bool,
-) -> Result<Duration> {
+fn run(in_path: PathBuf, pattern1: &str, pattern2: &str,
+        p1_replace: bool, p2_replace: bool) -> Result<Duration> {
+
     let mut from_found = false;
     let mut to_found = false;
     let mut from: Option<NaiveDateTime> = None;
@@ -219,14 +221,18 @@ fn run(
             i += 1;
             if (!from_found || p1_replace) && buf.contains(pattern1) {
                 info!("Matching line [{}]: {}", i, &buf);
-                let (timestamp, _) = buf.split_once('>').unwrap();
-                from = parse_datetime(timestamp.to_string()).ok();
+                let (timestamp, _) = buf
+                    .split_once('>')
+                    .context("Unexpected line format: no '>' separator")?;
+                from = parse_datetime(timestamp).ok();
                 from_found = true;
             }
             if from_found && buf.contains(pattern2) {
                 info!("Matching line [{}]: {}", i, &buf);
-                let (timestamp, _) = buf.split_once('>').unwrap();
-                to = parse_datetime(timestamp.to_string()).ok();
+                let (timestamp, _) = buf
+                    .split_once('>')
+                    .context("Unexpected line format: no '>' separator")?;
+                to = parse_datetime(timestamp).ok();
                 to_found = true;
                 if !p2_replace {
                     break;
@@ -247,8 +253,8 @@ fn run(
     Ok(duration)
 }
 
-fn parse_datetime(dt: String) -> Result<NaiveDateTime> {
-    let datetime = NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S")
+fn parse_datetime(dt: &str) -> Result<NaiveDateTime> {
+    let datetime = NaiveDateTime::parse_from_str(dt, "%Y-%m-%d %H:%M:%S")
         .with_context(|| format!("could not parse {}", dt))?;
     Ok(datetime)
 }
