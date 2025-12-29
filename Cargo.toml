@@ -1,6 +1,6 @@
 [package]
 name = "trace-duration-rs"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 authors = ["Joel Gruselius <github.com/jgruselius>"]
 description = "Find the time passed between the (first) occurrence of two strings or patterns in a log file"
@@ -9,14 +9,15 @@ description = "Find the time passed between the (first) occurrence of two string
 
 [dependencies]
 regex = "1"
-log = "0.4"
-env_logger = "0.11"
+memchr = "2"
+log = "0"
+env_logger = "0"
 anyhow = "1"
-chrono = "0.4"
-encoding_rs = "0.8"
-encoding_rs_io = "0.1.7"
+jiff = "0"
 clap = { version = "4", features = ["derive"] }
 
 [profile.release]
 lto = true
 strip = true
+panic = "abort"
+codegen-units = 1

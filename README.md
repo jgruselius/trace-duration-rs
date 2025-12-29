@@ -18,7 +18,7 @@ trace-duration-rs -f 'InitializeSystem - start' -t 'TerminateSystem - complete' 
 **Usage:**
 
 ```
-trace-duration-rs 0.7.0
+trace-duration-rs 0.8.0
 Joel Gruselius <github.com/jgruselius>
 Find the time passed between the (first) occurrence of two strings or patterns in a log file
 
